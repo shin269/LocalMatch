@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import catsImage from '../images/cats.jpg'; // 이미지 파일 import
+import catsImage from '../images/convenience.png'; // 이미지 파일 import
 
 function Question2({ onAnswerChange }) {
   const navigate = useNavigate();
@@ -46,7 +46,7 @@ function Question2({ onAnswerChange }) {
           textAlign: 'center',
         }}
       >
-        질문 2
+        #질문 2.
       </h2>
 
       <div
@@ -86,7 +86,7 @@ function Question2({ onAnswerChange }) {
               fontWeight: 'bold',
             }}
           >
-            #2. 다른 항목의 중요도를 선택하세요:
+            #2. 편의시설(상점, 병원, 학교 등)이 얼마나 중요한가요?
           </p>
           {['매우 중요함', '중요함', '보통', '중요하지 않음', '매우 중요하지 않음'].map(
             (label, index) => (

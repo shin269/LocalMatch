@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import catsImage from '../images/cats.jpg'; // 이미지 파일 import
+import catsImage from '../images/price.png'; // 이미지 파일 import
 
 function Question1({ onAnswerChange }) {
   const navigate = useNavigate();
@@ -43,7 +43,7 @@ function Question1({ onAnswerChange }) {
           textAlign: 'center', // 텍스트 중앙 정렬
         }}
       >
-        안녕하세요
+        #질문 1.
       </h2>
 
       {/* 흰색 카드 박스 */}
@@ -86,7 +86,7 @@ function Question1({ onAnswerChange }) {
               fontWeight: 'bold',
             }}
           >
-            #1. 000의 중요도를 선택하세요:
+            #1. 해당 지역의 가격(집값, 생활비 등)이 얼마나 중요한가요?
           </p>
           {['매우 중요함', '중요함', '보통', '중요하지 않음', '매우 중요하지 않음'].map(
             (label, index) => (

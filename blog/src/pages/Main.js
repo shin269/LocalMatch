@@ -106,8 +106,8 @@ function Main() {
             style={{
               fontSize: '20px',
               color: '#333333',
-              lineHeight: '1.8',
-              marginBottom: '20px',
+              lineHeight: '2', // 텍스트 간격 조정
+              marginBottom: '30px', // 문단 간 간격
             }}
           >
             다양한 선호도를 선택하여<br />
@@ -118,15 +118,15 @@ function Main() {
               textAlign: 'left',
               color: '#555',
               fontSize: '16px',
-              lineHeight: '1.8',
+              lineHeight: '2', // 항목 간 간격 조정
               paddingLeft: '40px',
             }}
           >
-            <li>🚪 조건1조건1조건1</li>
-            <li>🏘️ 조건2조건2조건2</li>
-            <li>💰 조건3조건3조건3</li>
-            <li>🛠️ 조건4조건4조건4</li>
-            <li>🥰 조건5조건5조건5</li>
+            <li>🚪 가격: "해당 지역의 가격(집값, 생활비 등)이 얼마나 중요한가요?" </li>
+            <li>🏘️ 편의시설: "해당 지역의 편의시설(상점, 병원, 학교 등)이 얼마나 중요한가요?"</li>
+            <li>💰 문화시설: "해당 지역의 문화시설(박물관, 영화관, 공연장 등)이 얼마나 중요한가요?"</li>
+            <li>🛠️ 교통: "해당 지역의 교통편(버스, 지하철 등)이 얼마나 중요한가요?"</li>
+            <li>🥰 안전: "해당 지역의 안전(치안, 범죄율 등)이 얼마나 중요한가요?"</li>
           </ul>
         </div>
       </div>
