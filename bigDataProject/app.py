@@ -1,21 +1,18 @@
 from flask import Flask, jsonify, request
-from flask_cors import CORS  # CORS 모듈 추가
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.feature import StandardScaler
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, FloatType
+import numpy as np  
+from sklearn.metrics import silhouette_score 
 
-# Flask 앱 생성
 app = Flask(__name__)
-
-# CORS 설정
-CORS(app)  # 모든 경로에 대해 CORS 설정, 특정 경로만 허용하고 싶다면 resources={r"/recommendation": {"origins": "*"}} 추가 가능
 
 # Spark 세션 설정
 spark = SparkSession.builder.appName("SeoulRecommendation").getOrCreate()
 
-# 데이터 스키마 정의 (schema1, schema2는 그대로 사용)
+# 스키마 정의
 schema1 = StructType([
     StructField("gu", StringType(), True),
     StructField("dong", StringType(), True),
@@ -64,43 +61,29 @@ schema2 = StructType([
     StructField("호수", IntegerType(), True)
 ])
 
-# 기본 경로 설정 (index)
-@app.route('/')
-def index():
-    return "Welcome to the Seoul Recommendation System!"
-
-# 추천 경로 처리 (POST 요청)
+# Flask 엔드포인트
 @app.route('/recommendation', methods=['POST'])
 def recommendation():
-    print("POST 요청을 받았습니다!")  # 요청을 받았을 때 로그 출력
-
     user_data = request.get_json()
 
-    # 사용자로부터 입력받은 데이터
     price = user_data['price']  # 가격 기준
     convenience = user_data['convenience']  # 집객시설 기준
     culture = user_data['culture']  # 문화시설 기준
     traffic = user_data['traffic']  # 교통 기준
     safety = user_data['safety']  # 안전 기준
 
-    # 데이터 로딩
     df1 = spark.read.csv("data1.csv", header=True, schema=schema1)
     df2 = spark.read.csv("data2.csv", header=True, schema=schema2)
 
-    # 결측값 처리
     df1 = df1.fillna(0)
     df2 = df2.fillna(0)
-
-    # 데이터 조인
     df_joined = df1.join(df2, df1["gu"] == df2["대지위치"], "inner")
 
-    # 필터링: 가격 조건에 맞는 데이터만 남김
     df_filtered = df_joined.filter(
         (df_joined['임대료(만원)_월세'] <= price * 100) | 
         (df_joined['보증금(만원)_전세'] <= price * 100)
     )
 
-    # 특성 벡터화
     numerical_cols = [
         'singlePersonNum', 'singlePersonRatio', '집객시설_수', '관공서_수', '은행_수',
         '종합병원_수', '일반_병원_수', '약국_수', '유치원_수', '초등학교_수', '중학교_수', 
@@ -112,12 +95,11 @@ def recommendation():
     assembler = VectorAssembler(inputCols=numerical_cols, outputCol="features")
     df_transformed = assembler.transform(df_filtered)
 
-    # 표준화
     scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
     scaler_model = scaler.fit(df_transformed)
     df_scaled = scaler_model.transform(df_transformed)
 
-    # KMeans 클러스터링
+    # KMeans 
     kmeans = KMeans(k=4, seed=42, featuresCol="scaled_features", predictionCol="cluster")
     model = kmeans.fit(df_scaled)
     df_with_clusters = model.transform(df_scaled)
@@ -126,9 +108,11 @@ def recommendation():
     price_score = (df_with_clusters['임대료(만원)_월세'] * price + 
                    df_with_clusters['보증금(만원)_전세'] * price)
 
-    convenience_score = (df_with_clusters['백화점_수'] * convenience + 
-                         df_with_clusters['극장_수'] * convenience + 
-                         df_with_clusters['숙박_시설_수'] * convenience + 
+    convenience_score = (df_with_clusters['관공서_수'] * convenience + 
+                         df_with_clusters['은행_수'] * convenience + 
+                         df_with_clusters['종합병원_수'] * convenience + 
+                         df_with_clusters['일반_병원_수'] * convenience + 
+                         df_with_clusters['약국_수'] * convenience +
                          df_with_clusters['슈퍼마켓_수'] * convenience)
 
     safety_score = (df_with_clusters['범죄'] * safety + 
@@ -139,21 +123,60 @@ def recommendation():
     culture_score = (df_with_clusters['극장_수'] * culture + 
                      df_with_clusters['백화점_수'] * culture + 
                      df_with_clusters['숙박_시설_수'] * culture + 
-                     df_with_clusters['슈퍼마켓_수'] * culture)
+                     df_with_clusters['집객시설_수'] * culture)
 
-    # 총 점수 계산
-    df_with_scores = df_with_clusters.withColumn(
-        "score", 
-        (price_score + convenience_score + safety_score + culture_score)
+    # 교통 점수 계산 (교통 관련 시설: 지하철 역 수, 버스 터미널 수, 철도 역 수)
+    traffic_score = (
+        df_with_clusters['지하철_역_수'] * traffic + 
+        df_with_clusters['버스_터미널_수'] * traffic + 
+        df_with_clusters['철도_역_수'] * traffic
     )
 
-    # 상위 3개 추천 지역
+    df_with_scores = df_with_clusters.withColumn(
+        "score", 
+        (price_score + convenience_score + safety_score + culture_score + traffic_score)
+    )
+
+    # 상위 3개 계산
     top_3 = df_with_scores.orderBy("score", ascending=False).limit(3)
 
     result = top_3.select("gu", "dong", "score").collect()
     response = [{"gu": row["gu"], "dong": row["dong"], "score": row["score"]} for row in result]
     
     return jsonify(response)
+
+
+@app.route('/silhouette_analysis', methods=['GET'])
+def silhouette_analysis():
+    df1 = spark.read.csv("data1.csv", header=True, schema=schema1)
+    df2 = spark.read.csv("data2.csv", header=True, schema=schema2)
+    
+    df1 = df1.fillna(0)
+    df2 = df2.fillna(0)
+    df_joined = df1.join(df2, df1["gu"] == df2["대지위치"], "inner")
+
+    numerical_cols = [
+        'singlePersonNum', 'singlePersonRatio', '집객시설_수', '관공서_수', '은행_수',
+        '종합병원_수', '일반_병원_수', '약국_수', '유치원_수', '초등학교_수', '중학교_수', 
+        '고등학교_수', '대학교_수', '백화점_수', '슈퍼마켓_수', '극장_수', '숙박_시설_수', 
+        '공항_수', '철도_역_수', '버스_터미널_수', '지하철_역_수', '버스_정거장_수', 'AvgWorkPop', 
+        '보증금(만원)_전세', '임대료(만원)_전세', '임대면적_전세', '보증금(만원)_월세', 
+        '임대료(만원)_월세', '임대면적_월세'
+    ]
+    assembler = VectorAssembler(inputCols=numerical_cols, outputCol="features")
+    df_transformed = assembler.transform(df_joined)
+
+    scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
+    scaler_model = scaler.fit(df_transformed)
+    df_scaled = scaler_model.transform(df_transformed)
+
+    kmeans = KMeans(k=4, seed=42, featuresCol="scaled_features", predictionCol="cluster")
+    model = kmeans.fit(df_scaled)
+    df_with_clusters = model.transform(df_scaled)
+
+    silhouette_avg = silhouette_score(df_with_clusters.select("features").rdd.map(lambda x: x[0]), df_with_clusters.select("prediction").rdd.collect())
+    return jsonify({"silhouette_score": silhouette_avg})
+
 
 if __name__ == "__main__":
     app.run(debug=True)
