@@ -163,19 +163,33 @@ def silhouette_analysis():
         '보증금(만원)_전세', '임대료(만원)_전세', '임대면적_전세', '보증금(만원)_월세', 
         '임대료(만원)_월세', '임대면적_월세'
     ]
+
     assembler = VectorAssembler(inputCols=numerical_cols, outputCol="features")
     df_transformed = assembler.transform(df_joined)
 
     scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
     scaler_model = scaler.fit(df_transformed)
     df_scaled = scaler_model.transform(df_transformed)
+    silhouette_scores = []
+    
+    for k in range(2, 11):
+        kmeans = KMeans(k=k, seed=42, featuresCol="scaled_features", predictionCol="cluster")
+        model = kmeans.fit(df_scaled)
+    
+        predictions = model.transform(df_scaled)
+        features = np.array(predictions.select("scaled_features").rdd.map(lambda x: x[0]).collect())
+        labels = np.array(predictions.select("cluster").rdd.map(lambda x: x[0]).collect())
+        score = silhouette_score(features, labels, metric='euclidean')
+        silhouette_scores.append((k, score))
 
-    kmeans = KMeans(k=4, seed=42, featuresCol="scaled_features", predictionCol="cluster")
-    model = kmeans.fit(df_scaled)
-    df_with_clusters = model.transform(df_scaled)
+    best_k, best_score = max(silhouette_scores, key=lambda x: x[1])
 
-    silhouette_avg = silhouette_score(df_with_clusters.select("features").rdd.map(lambda x: x[0]), df_with_clusters.select("prediction").rdd.collect())
-    return jsonify({"silhouette_score": silhouette_avg})
+    return jsonify({
+        "best_k": best_k,
+        "best_score": best_score,
+        "all_scores": silhouette_scores
+    })
+
 
 
 if __name__ == "__main__":
